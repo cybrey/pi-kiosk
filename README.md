@@ -11,7 +11,7 @@ A multi-pane touchscreen kiosk browser for the Raspberry Pi 4, built with Electr
 ## What you need
 
 - **Raspberry Pi 4** (2 GB works; 4 GB is better for several camera streams). A Pi 5 should also work.
-- **A good power supply:** the official 5.1 V 3 A USB-C supply, or a USB-C PD charger (45 W or more). A 2 A phone charger causes freezes and under-voltage warnings.
+- **A good power supply:** the official 5.1 V 3 A USB-C supply, or a USB-C PD charger (45 W or more). 
 - **A microSD card**, 16 GB or larger (A1/A2 rated).
 - **A touchscreen monitor** connected by HDMI (use the port next to the USB-C power socket, HDMI 0) plus its USB cable for touch.
 - **A PC** on the same network for the setup and for editing the configuration. The steps below use Windows; macOS and Linux work the same way.
