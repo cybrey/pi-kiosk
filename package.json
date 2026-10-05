@@ -1,0 +1,17 @@
+{
+  "name": "pi-kiosk",
+  "version": "1.0.0",
+  "description": "Multi-pane touchscreen kiosk browser for Raspberry Pi (Electron)",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\"",
+    "deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File deploy.ps1"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^44.5.1",
+    "express": "^5.2.1"
+  }
+}

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Kiosk menu</title>
+  <link rel="stylesheet" href="/shared/kiosk.css">
+  <link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+  <div id="backdrop"></div>
+  <section id="panel" aria-label="Kiosk menu">
+    <header>
+      <div>
+        <div id="clock"></div>
+        <div class="sub">Choose a setup</div>
+      </div>
+      <div class="actions">
+        <button id="reload" title="Reload all panes">⟳ Reload</button>
+        <a class="btn" id="configure" href="/">⚙ Configure</a>
+        <button id="close" class="primary" title="Close">✕</button>
+      </div>
+    </header>
+    <div id="setups"></div>
+    <div id="empty" hidden>
+      No setups yet. <a href="/#setups">Create one in Configure</a>.
+    </div>
+    <div class="handle" aria-hidden="true"></div>
+  </section>
+  <script src="/shared/layouts.js"></script>
+  <script src="/shared/api.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>

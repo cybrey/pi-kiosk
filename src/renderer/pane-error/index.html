@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Reconnecting</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #111; color: #cfd3da; font: 15px/1.4 system-ui, sans-serif; }
+    body { display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; box-sizing: border-box; }
+    h1 { font-size: 18px; margin: 12px 0 6px; color: #fff; }
+    .url, .reason { color: #8b919c; font-size: 13px; word-break: break-all; }
+    .spinner { width: 28px; height: 28px; margin: 0 auto; border: 3px solid #333; border-top-color: #4f8cff; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div>
+    <div class="spinner"></div>
+    <h1 id="name">Reconnecting…</h1>
+    <div class="url" id="url"></div>
+    <div class="reason" id="reason"></div>
+    <div class="reason" id="retry"></div>
+  </div>
+  <script>
+    const q = new URLSearchParams(location.search);
+    document.getElementById('name').textContent = `Can't reach ${q.get('name') || 'site'}`;
+    document.getElementById('url').textContent = q.get('url') || '';
+    document.getElementById('reason').textContent = q.get('reason') || '';
+    let left = Number(q.get('retry')) || 0;
+    const retry = document.getElementById('retry');
+    const tick = () => { retry.textContent = left > 0 ? `Retrying in ${left}s` : 'Retrying…'; left--; };
+    tick();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>

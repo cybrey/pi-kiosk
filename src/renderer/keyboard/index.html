@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Keyboard</title>
+  <style>
+    :root {
+      --bg: #14161b;
+      --key: #2a2f3a;
+      --key-fn: #1f232c;
+      --key-on: #3a4252;
+      --down: #4f8cff;
+      --text: #e8eaef;
+      --muted: #9aa1ae;
+      --gap: 6px;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font: 500 22px/1 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: none;
+      cursor: default;
+    }
+    #kb {
+      box-sizing: border-box;
+      height: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: var(--gap);
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+    }
+    #kb.numpad { max-width: 560px; }
+    .row { flex: 1; display: flex; gap: var(--gap); min-height: 0; }
+    .key {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: var(--key);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+    }
+    .key.fn { background: var(--key-fn); color: var(--muted); font-size: 18px; }
+    .key.on { background: var(--key-on); color: #fff; }
+    .key.lock { background: var(--down); color: #fff; }
+    .key.down { background: var(--down); color: #fff; }
+    .spacer { flex: 1 1 0; }
+  </style>
+</head>
+<body>
+  <div id="kb"></div>
+  <script>
+    'use strict';
+
+    // Key definitions: a one-character string types itself; objects are special keys.
+    // `w` is the width in key units; every row of a layout adds up to the same width.
+    const BS = { action: 'backspace', label: '⌫', w: 1.5, repeat: true };
+    const ENTER = { action: 'enter', label: '⏎', w: 2 };
+    const HIDE = { action: 'hide', label: '⌨ ▾', w: 2 };
+    const LEFT = { action: 'left', label: '←' };
+    const RIGHT = { action: 'right', label: '→' };
+    const SPACE = { text: ' ', label: 'space', w: 5 };
+    const SHIFT = { shift: true, label: '⇧', w: 1.5 };
+    const page = (to, label, w = 1.5) => ({ page: to, label, w });
+
+    const LAYOUTS = {
+      letters: (ctx) => [
+        [...'qwertyuiop', BS],
+        [{ spacer: 0.5 }, ...'asdfghjkl', ENTER],
+        [SHIFT, ...'zxcvbnm,.-'],
+        [page('sym', '?123'), ctx, SPACE, LEFT, RIGHT, HIDE],
+      ],
+      sym: () => [
+        [...'1234567890', BS],
+        [{ spacer: 0.5 }, ...'@#$%&*-+=', ENTER],
+        [page('sym2', '=\\<'), ...'()"\':;!?/_'],
+        [page('letters', 'ABC'), ',', SPACE, LEFT, RIGHT, HIDE],
+      ],
+      sym2: () => [
+        [...'~`|\\^{}[]©', BS],
+        [{ spacer: 0.5 }, ...'<>€£¥°•«»', ENTER],
+        [page('sym', '?123'), ...'§¶±×÷µ¿¡…²'],
+        [page('letters', 'ABC'), '.', SPACE, LEFT, RIGHT, HIDE],
+      ],
+      numpad: (ctx) => [
+        ['1', '2', '3', { ...BS, w: 1 }],
+        ['4', '5', '6', { ...ENTER, w: 1 }],
+        ['7', '8', '9', ctx],
+        [page('letters', 'ABC', 1), '0', '.', { ...HIDE, w: 1 }],
+      ],
+    };
+
+    const kb = document.getElementById('kb');
+    let kind = 'text';
+    let current = 'letters';
+    let shift = 'off'; // 'off' | 'once' | 'lock'
+    let lastShiftTap = 0;
+    let repeatTimer = null;
+
+    function contextKey() {
+      if (current === 'numpad') return kind === 'tel' ? '+' : '-';
+      return kind === 'url' ? '/' : '@';
+    }
+
+    function render() {
+      kb.className = current === 'numpad' ? 'numpad' : '';
+      const upper = shift !== 'off';
+      kb.replaceChildren(...LAYOUTS[current](contextKey()).map((row) => {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'row';
+        for (const def of row) {
+          const key = typeof def === 'string' ? { text: def, label: def } : def;
+          const el = document.createElement('div');
+          if (key.spacer) {
+            el.className = 'spacer';
+            el.style.flexGrow = key.spacer;
+          } else {
+            el.className = 'key';
+            if (key.text === undefined || key.text === ' ') el.classList.add('fn');
+            if (key.shift && shift !== 'off') el.classList.add(shift === 'lock' ? 'lock' : 'on');
+            el.style.flexGrow = key.w || 1;
+            el.textContent = upper && key.text ? key.label.toUpperCase() : key.label;
+            el.addEventListener('pointerdown', (e) => {
+              e.preventDefault();
+              el.classList.add('down');
+              press(key);
+            });
+          }
+          rowEl.appendChild(el);
+        }
+        return rowEl;
+      }));
+    }
+
+    function press(key) {
+      stopRepeat();
+      if (key.page) {
+        current = key.page;
+        shift = 'off';
+        render();
+      } else if (key.shift) {
+        const now = Date.now();
+        if (shift === 'lock') shift = 'off';
+        else if (shift === 'once' && now - lastShiftTap < 400) shift = 'lock';
+        else shift = shift === 'off' ? 'once' : 'off';
+        lastShiftTap = now;
+        render();
+      } else if (key.text !== undefined) {
+        const upper = shift !== 'off';
+        window.kioskKeyboard.press({ text: upper ? key.text.toUpperCase() : key.text });
+        if (shift === 'once') {
+          shift = 'off';
+          render();
+        }
+      } else {
+        window.kioskKeyboard.press({ action: key.action });
+        if (key.repeat) {
+          repeatTimer = setTimeout(function again() {
+            window.kioskKeyboard.press({ action: key.action });
+            repeatTimer = setTimeout(again, 70);
+          }, 450);
+        }
+      }
+    }
+
+    function stopRepeat() {
+      clearTimeout(repeatTimer);
+      repeatTimer = null;
+    }
+
+    function release() {
+      stopRepeat();
+      for (const el of kb.querySelectorAll('.down')) el.classList.remove('down');
+    }
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    // No release on blur: focus leaves this view on every tap (it goes back to the page).
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    window.kioskKeyboard.onLayout((next) => {
+      kind = next;
+      current = kind === 'number' || kind === 'tel' ? 'numpad' : 'letters';
+      shift = 'off';
+      release();
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

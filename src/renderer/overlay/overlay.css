@@ -1,0 +1,89 @@
+html, body {
+  background: transparent;
+  height: 100%;
+  overflow: hidden;
+}
+
+#backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+#panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0 0 22px 22px;
+  padding: 20px 24px 28px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  transform: translateY(-105%);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+body.open #backdrop { opacity: 1; }
+body.open #panel { transform: translateY(0); }
+
+/* In a normal browser (phone/PC remote), show the panel as a regular page. */
+body.remote { background: var(--bg); overflow: auto; }
+body.remote #backdrop { display: none; }
+body.remote #panel { position: static; transform: none; max-height: none; box-shadow: none; border: 0; }
+body.remote #close, body.remote .handle { display: none; }
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+#clock { font-size: 28px; font-weight: 700; letter-spacing: 0.5px; }
+.sub { color: var(--muted); font-size: 14px; }
+.actions { display: flex; gap: 10px; }
+#close { width: var(--tap); padding: 0; font-size: 20px; }
+
+#setups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.setup {
+  display: block;
+  min-height: 0;
+  padding: 10px;
+  text-align: left;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.setup.active { border-color: var(--accent); background: #1d2a44; }
+.setup .name {
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setup .pane > div { font-size: 11px; }
+
+#empty { color: var(--muted); padding: 30px 0; text-align: center; }
+#empty a { color: var(--accent); }
+
+.handle {
+  width: 64px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  margin: 22px auto 0;
+}

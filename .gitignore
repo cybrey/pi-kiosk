@@ -1,0 +1,12 @@
+node_modules/
+*.log
+
+# Your Pi's address (written by deploy.ps1)
+.deploy-target
+
+# Your kiosk settings and sites never go in the repo. They live on the Pi in
+# ~/.config/pi-kiosk/config.json; these catch exports/copies left in this folder.
+config.json
+config.json.*
+kiosk-config*.json
+*.broken-*

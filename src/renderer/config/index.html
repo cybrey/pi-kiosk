@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kiosk configuration</title>
+  <link rel="stylesheet" href="/shared/kiosk.css">
+  <link rel="stylesheet" href="config.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="btn ghost" id="back" href="/overlay/" title="Back to setups">‹ Setups</a>
+    <h1>Kiosk configuration</h1>
+    <nav id="tabs">
+      <button data-tab="setups">Setups</button>
+      <button data-tab="sites">Sites</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+    <button id="done" class="primary">Done</button>
+  </header>
+
+  <main>
+    <section id="tab-setups" class="tab">
+      <div class="section-head">
+        <p class="hint">A setup is a layout with up to 4 panes. Each pane shows one of your sites.</p>
+        <button class="primary" id="add-setup">+ New setup</button>
+      </div>
+      <div id="setup-list" class="card-list"></div>
+    </section>
+
+    <section id="tab-sites" class="tab">
+      <div class="section-head">
+        <p class="hint">Sites are reusable. Add them once, then pick them for panes in any setup.</p>
+        <button class="primary" id="add-site">+ New site</button>
+      </div>
+      <div id="site-list" class="card-list"></div>
+    </section>
+
+    <section id="tab-settings" class="tab">
+      <form id="settings-form" class="settings"></form>
+    </section>
+  </main>
+
+  <!-- Full-screen editor sheet (setups and sites) -->
+  <div id="sheet" hidden>
+    <div class="sheet-inner">
+      <header>
+        <button type="button" class="ghost" id="sheet-cancel">Cancel</button>
+        <h2 id="sheet-title"></h2>
+        <button type="button" class="primary" id="sheet-save">Save</button>
+      </header>
+      <div id="sheet-body"></div>
+    </div>
+  </div>
+
+  <script src="/shared/layouts.js"></script>
+  <script src="/shared/api.js"></script>
+  <script src="config.js"></script>
+</body>
+</html>
