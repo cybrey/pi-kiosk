@@ -20,7 +20,7 @@ function isLoopback(req) {
  *
  * @param {import('./config-store').ConfigStore} store
  * @param {import('./display').Display} display
- * @param {{ reloadPanes: () => void, restart: () => void, screenSize: () => {width:number,height:number} }} actions
+ * @param {{ reloadPanes: () => void, restart: () => void, screenSize: () => {width:number,height:number}, mqtt?: import('./mqtt').DoorbellSubscriber }} actions
  */
 function createServer(store, display, actions) {
   const app = express();
@@ -32,6 +32,12 @@ function createServer(store, display, actions) {
   const clients = new Set();
   display.on('changed', (state) => {
     const msg = `event: config\ndata: ${JSON.stringify(state)}\n\n`;
+    for (const res of clients) res.write(msg);
+  });
+  // MQTT connection status, as its own event so the Settings form isn't
+  // re-rendered (losing unsaved edits) every time it changes.
+  actions.mqtt?.on('status', (status) => {
+    const msg = `event: mqtt\ndata: ${JSON.stringify({ status })}\n\n`;
     for (const res of clients) res.write(msg);
   });
 
@@ -61,6 +67,7 @@ function createServer(store, display, actions) {
     layouts: LAYOUTS,
     screen: actions.screenSize(),
     state: display.state(),
+    mqttStatus: actions.mqtt?.status || 'off',
   })));
   api.put('/config', wrap((req) => store.replace(req.body)));
 

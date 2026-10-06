@@ -320,6 +320,7 @@
 
   function renderSettings() {
     const s = state.config.settings;
+    const m = s.mqtt;
     const form = $('#settings-form');
     const num = (key, attrs) => h('input', { type: 'number', name: key, value: String(s[key]), ...attrs });
     const check = (key, label) =>
@@ -348,6 +349,24 @@
           'Sites not on screen stay loaded (paused and muted) so switching back is instant. Lower this if the Pi runs low on memory.'),
         check('ignoreCertErrors', 'Accept self-signed HTTPS certificates (common on LAN devices)'),
       ),
+      h('fieldset', null, h('legend', null, 'Doorbell (MQTT)'),
+        h('div.hint', { style: 'margin:0 0 14px' }, 'When Home Assistant publishes a doorbell ring, show a setup for a while, then go back. ',
+          'Status: ', h('strong', { id: 'mqtt-status' }, state.mqttStatus || 'off')),
+        h('label.check', null, h('input', { type: 'checkbox', name: 'mqttEnabled', checked: m.enabled }), 'Listen for doorbell rings'),
+        field('Broker', h('input', { type: 'text', name: 'mqttUrl', value: m.url, placeholder: 'mqtt://homeassistant.local:1883' }),
+          'With the Mosquitto add-on: mqtt://<Home Assistant IP>:1883'),
+        field('Username', h('input', { type: 'text', name: 'mqttUsername', value: m.username, autocomplete: 'off' }),
+          'A Home Assistant user works with the Mosquitto add-on.'),
+        field('Password', h('input', { type: 'password', name: 'mqttPassword', value: m.password, autocomplete: 'new-password' })),
+        field('Setup to show', h('select', { name: 'mqttSetupId' },
+          h('option', { value: '', selected: !m.setupId }, '— choose —'),
+          state.config.setups.map((st) => h('option', { value: st.id, selected: st.id === m.setupId }, st.name)))),
+        field('Show for (seconds)', h('input', { type: 'number', name: 'mqttDurationSeconds', value: String(m.durationSeconds), min: 5, max: 3600 }),
+          'Ringing again restarts the countdown.'),
+        field('Subscriber id', h('input', { type: 'text', name: 'mqttClientId', value: m.clientId }),
+          `Publish to ${m.topicPrefix}/${m.clientId}/show to ring only this kiosk; ${m.topicPrefix}/show rings every screen.`),
+        field('Topic prefix', h('input', { type: 'text', name: 'mqttTopicPrefix', value: m.topicPrefix })),
+      ),
       h('fieldset', null, h('legend', null, 'Remote access'),
         field('PIN for editing from other devices', h('input', { type: 'password', name: 'configPin', value: s.configPin, autocomplete: 'new-password' }),
           'Leave empty to allow anyone on your network. The touchscreen itself never needs the PIN.'),
@@ -367,7 +386,7 @@
           kiosk.canShutdown ? h('button.danger', { type: 'button', onclick: shutdown }, 'Shut down') : null,
         ),
         kiosk.canShutdown ? h('div.hint', null, 'Shut down before unplugging the power. Wait until the green light stops flashing.') : null,
-      ) : null,
+      ) : '', // replaceChildren would print null as text
     );
   }
 
@@ -390,6 +409,17 @@
       ignoreCertErrors: f.ignoreCertErrors.checked,
       configPin: f.configPin.value,
       port: Number(f.port.value),
+      mqtt: {
+        ...state.config.settings.mqtt,
+        enabled: f.mqttEnabled.checked,
+        url: f.mqttUrl.value.trim(),
+        username: f.mqttUsername.value.trim(),
+        password: f.mqttPassword.value,
+        setupId: f.mqttSetupId.value,
+        durationSeconds: Number(f.mqttDurationSeconds.value),
+        clientId: f.mqttClientId.value.trim(),
+        topicPrefix: f.mqttTopicPrefix.value.trim(),
+      },
     };
     run(() => api.put('/settings', data), 'Settings saved').then(() => {
       if (data.configPin) api.setPin(data.configPin);
@@ -460,5 +490,11 @@
   window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
   showTab(location.hash.slice(1));
   load().catch((err) => api.toast(err.message, true));
-  api.subscribe(() => load().catch(() => {}));
+  const events = api.subscribe(() => load().catch(() => {}));
+  events.addEventListener('mqtt', (e) => {
+    const { status } = JSON.parse(e.data);
+    if (state) state.mqttStatus = status;
+    const el = $('#mqtt-status');
+    if (el) el.textContent = status;
+  });
 })();

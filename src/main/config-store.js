@@ -9,6 +9,19 @@ const { LAYOUTS, normalizeRatios } = require('./layouts');
 
 const DEFAULT_PATH = path.join(os.homedir(), '.config', 'pi-kiosk', 'config.json');
 
+// Doorbell over MQTT (see src/main/mqtt.js). Off until a broker is filled in.
+const DEFAULT_MQTT = {
+  enabled: false,
+  url: 'mqtt://homeassistant.local:1883',
+  username: '',
+  password: '',
+  topicPrefix: 'doorbell',
+  clientId: '',
+  setupId: '',
+  durationSeconds: 30,
+  maxAgeSeconds: 30,
+};
+
 const DEFAULT_SETTINGS = {
   activeSetupId: null,
   gestureEdgePx: 40,
@@ -26,6 +39,7 @@ const DEFAULT_SETTINGS = {
   ignoreCertErrors: true,
   configPin: '',
   port: 8080,
+  mqtt: DEFAULT_MQTT,
 };
 
 function defaultConfig() {
@@ -131,7 +145,33 @@ function cleanSettings(s, setupIds) {
   out.configPin = String(src.configPin || '').trim();
   out.port = Math.round(num(src.port, out.port, 1, 65535));
   out.activeSetupId = setupIds.has(src.activeSetupId) ? src.activeSetupId : [...setupIds][0] || null;
+  out.mqtt = cleanMqtt(src.mqtt, setupIds);
   return out;
+}
+
+// MQTT topic levels can't contain "/", "+" or "#"; keep ids simple.
+function topicId(v, def) {
+  const id = String(v || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  return id || def;
+}
+
+function cleanMqtt(m, setupIds) {
+  const src = m || {};
+  const url = String(src.url ?? DEFAULT_MQTT.url).trim();
+  if (src.enabled && !/^(mqtts?|wss?):\/\/[^/]+/.test(url)) {
+    throw new ValidationError('MQTT broker must look like mqtt://host:1883');
+  }
+  return {
+    enabled: !!src.enabled,
+    url,
+    username: String(src.username || ''),
+    password: String(src.password || ''),
+    topicPrefix: String(src.topicPrefix || DEFAULT_MQTT.topicPrefix).trim().replace(/^\/+|\/+$/g, '') || DEFAULT_MQTT.topicPrefix,
+    clientId: topicId(src.clientId, topicId(os.hostname().split('.')[0], 'kiosk')),
+    setupId: setupIds.has(src.setupId) ? src.setupId : '',
+    durationSeconds: Math.round(num(src.durationSeconds, DEFAULT_MQTT.durationSeconds, 5, 3600)),
+    maxAgeSeconds: Math.round(num(src.maxAgeSeconds, DEFAULT_MQTT.maxAgeSeconds, 0, 3600)),
+  };
 }
 
 // Validate and normalise a whole config object. Throws ValidationError.

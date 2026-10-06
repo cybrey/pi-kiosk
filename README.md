@@ -157,7 +157,7 @@ bash deploy/update.sh   # reinstalls dependencies only if needed, then restarts 
 
 **Swiping between setups** works like virtual desktops: swipe in from the right edge for the next setup, or from the left edge for the previous one. It wraps around, in the order on the Setups tab (use ↑/↓ to reorder). To keep a setup out of the swipe rotation (e.g. a doorbell screen only used by automations), untick "Include when swiping" in its editor. After each switch, the setup's name shows briefly at the bottom of the screen.
 
-**Settings** cover: gesture sensitivity, gap between panes, cursor hiding, the on-screen keyboard (turn it off if a real keyboard is attached), how many hidden sites stay loaded (instant switching versus memory; hidden sites are muted, their video and audio paused, and auto-reload waits until they are back on screen), self-signed certificate handling, an optional **PIN** for editing from other devices, and backup (export/import).
+**Settings** cover: gesture sensitivity, gap between panes, cursor hiding, the on-screen keyboard (turn it off if a real keyboard is attached), how many hidden sites stay loaded (instant switching versus memory; hidden sites are muted, their video and audio paused, and auto-reload waits until they are back on screen), self-signed certificate handling, an optional **PIN** for editing from other devices, the doorbell over MQTT (see below), and backup (export/import).
 
 Typing long URLs on the touchscreen is painful, so do most editing from a PC.
 
@@ -193,6 +193,48 @@ data:
   setup: doorbell
   seconds: 30
 ```
+
+## Doorbell over MQTT
+
+Instead of Home Assistant calling each screen, the kiosk can listen for doorbell rings on MQTT. HA publishes one message per ring and every subscriber reacts: this kiosk, and the [Doorbell Popup](https://github.com/cybrey/doorbell-popup) desktop app on PCs and Macs.
+
+Set it up under **Settings → Doorbell (MQTT)**:
+
+1. Tick **Listen for doorbell rings**.
+2. **Broker:** `mqtt://<Home Assistant IP>:1883` for the Mosquitto add-on.
+3. **Username** and **password:** with the Mosquitto add-on, any Home Assistant user works. A dedicated non-admin user is best.
+4. **Setup to show:** e.g. a full-screen camera setup. Untick "Include when swiping" on that setup if it is only for the doorbell.
+5. **Show for:** how many seconds before the kiosk goes back.
+
+The **Status** line in that section shows whether the kiosk is connected.
+
+| Topic | Effect |
+| --- | --- |
+| `doorbell/show` | Every screen shows its doorbell view (this kiosk: the chosen setup, temporarily) |
+| `doorbell/hide` | Every screen goes back now |
+| `doorbell/<subscriber id>/show` · `/hide` | Only this kiosk |
+| `doorbell/clients/<subscriber id>` | Published by the kiosk: retained `online` / `offline` |
+
+The payload is empty or JSON. `"timeoutSeconds": 45` overrides how long to show the setup. `"ts"` (unix seconds) lets the kiosk ignore rings that arrive more than 30 s late. Publish with QoS 1 and **retain off**: retained messages are ignored, so an old ring is never replayed when the kiosk reconnects.
+
+Home Assistant automation:
+
+```yaml
+alias: Doorbell → screens
+triggers:
+  - trigger: state
+    entity_id: event.front_door
+    not_from: [unavailable, unknown]
+actions:
+  - action: mqtt.publish
+    data:
+      topic: doorbell/show
+      qos: 1
+      retain: false
+      payload: '{"ts": {{ now().timestamp() | int }}}'
+```
+
+The broker password is stored in the kiosk's config file and is shown to anyone who can open the configuration page, so set a **PIN** if others share your network. Export files include it too.
 
 ## Files
 
