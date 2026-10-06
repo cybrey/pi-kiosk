@@ -157,7 +157,7 @@ bash deploy/update.sh   # reinstalls dependencies only if needed, then restarts 
 
 **Swiping between setups** works like virtual desktops: swipe in from the right edge for the next setup, or from the left edge for the previous one. It wraps around, in the order on the Setups tab (use ↑/↓ to reorder). To keep a setup out of the swipe rotation (e.g. a doorbell screen only used by automations), untick "Include when swiping" in its editor. After each switch, the setup's name shows briefly at the bottom of the screen.
 
-**Settings** cover: gesture sensitivity, gap between panes, cursor hiding, the on-screen keyboard (turn it off if a real keyboard is attached), how many hidden sites stay loaded (instant switching versus memory; hidden sites are muted, their video and audio paused, and auto-reload waits until they are back on screen), self-signed certificate handling, an optional **PIN** for editing from other devices, the doorbell over MQTT (see below), and backup (export/import).
+**Settings** cover: gesture sensitivity, gap between panes, cursor hiding, the on-screen keyboard (turn it off if a real keyboard is attached), how many hidden sites stay loaded (instant switching versus memory; hidden sites are muted, their video and audio paused, and auto-reload waits until they are back on screen), self-signed certificate handling, an optional **PIN** for editing from other devices, showing setups from MQTT (see below), and backup (export/import).
 
 Typing long URLs on the touchscreen is painful, so do most editing from a PC.
 
@@ -194,28 +194,37 @@ data:
   seconds: 30
 ```
 
-## Doorbell over MQTT
+## Showing setups from MQTT (doorbell, motion, …)
 
-Instead of Home Assistant calling each screen, the kiosk can listen for doorbell rings on MQTT. HA publishes one message per ring and every subscriber reacts: this kiosk, and the [Doorbell Popup](https://github.com/cybrey/doorbell-popup) desktop app on PCs and Macs.
+Instead of Home Assistant calling each screen, the kiosk can listen on MQTT and show a setup for a while when a message arrives, e.g. the doorbell camera when someone rings. HA publishes one message and every subscriber reacts: this kiosk, and the [Doorbell Popup](https://github.com/cybrey/doorbell-popup) desktop app on PCs and Macs.
 
-Set it up under **Settings → Doorbell (MQTT)**:
+**1. Connect to the broker** under **Settings → MQTT broker**:
 
-1. Tick **Listen for doorbell rings**.
-2. **Broker:** `mqtt://<Home Assistant IP>:1883` for the Mosquitto add-on.
-3. **Username** and **password:** with the Mosquitto add-on, any Home Assistant user works. A dedicated non-admin user is best.
-4. **Setup to show:** e.g. a full-screen camera setup. Untick "Include when swiping" on that setup if it is only for the doorbell.
-5. **Show for:** how many seconds before the kiosk goes back.
+- Tick **Connect to the MQTT broker**.
+- **Broker:** `mqtt://<Home Assistant IP>:1883` for the Mosquitto add-on.
+- **Username** and **password:** with the Mosquitto add-on, any Home Assistant user works. A dedicated non-admin user is best.
 
-The **Status** line in that section shows whether the kiosk is connected.
+The status line at the top of that section shows whether the kiosk is connected.
+
+**2. Give a setup a trigger.** On the Setups tab, edit the setup (e.g. a full-screen doorbell camera):
+
+- Tick **Show this setup when an MQTT message arrives**.
+- **Topic:** e.g. `doorbell/show`. Each topic can belong to one setup.
+- **Show for:** how many seconds before the kiosk goes back. Another message restarts the countdown.
+- Untick "Include when swiping" if the setup is only for the trigger.
+
+Several setups can have triggers, e.g. `doorbell/show` for the front door and `garden/show` for a garden camera, all over one connection.
+
+A topic ending in `/show` follows the Doorbell Popup convention:
 
 | Topic | Effect |
 | --- | --- |
-| `doorbell/show` | Every screen shows its doorbell view (this kiosk: the chosen setup, temporarily) |
-| `doorbell/hide` | Every screen goes back now |
+| `doorbell/show` | Every screen shows its doorbell view (this kiosk: the setup, temporarily) |
+| `doorbell/hide` | Go back now, if that setup is showing |
 | `doorbell/<subscriber id>/show` · `/hide` | Only this kiosk |
 | `doorbell/clients/<subscriber id>` | Published by the kiosk: retained `online` / `offline` |
 
-The payload is empty or JSON. `"timeoutSeconds": 45` overrides how long to show the setup. `"ts"` (unix seconds) lets the kiosk ignore rings that arrive more than 30 s late. Publish with QoS 1 and **retain off**: retained messages are ignored, so an old ring is never replayed when the kiosk reconnects.
+Any other topic only shows its setup. The payload is empty or JSON. `"timeoutSeconds": 45` overrides how long to show the setup. `"ts"` (unix seconds) lets the kiosk ignore messages that arrive more than 30 s late. Publish with QoS 1 and **retain off**: retained messages are ignored, so an old ring is never replayed when the kiosk reconnects.
 
 Home Assistant automation:
 

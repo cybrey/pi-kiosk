@@ -13,7 +13,7 @@ const { Keyboard } = require('./keyboard');
 const { Display } = require('./display');
 const { Toast } = require('./toast');
 const { startServer } = require('./server');
-const { DoorbellSubscriber } = require('./mqtt');
+const { TriggerSubscriber } = require('./mqtt');
 
 // ---- Chromium switches (must be set before 'ready') ------------------------
 if (process.platform === 'linux') {
@@ -117,7 +117,7 @@ let panes;
 let overlay;
 let toast;
 let keyboard;
-let doorbell;
+let mqttTriggers;
 
 function createWindow() {
   // Start at the screen's size in kiosk mode: under Wayland (labwc) the switch to
@@ -219,7 +219,7 @@ function registerShortcuts() {
 async function main() {
   store = new ConfigStore();
   display = new Display(store);
-  doorbell = new DoorbellSubscriber(store, display);
+  mqttTriggers = new TriggerSubscriber(store, display);
   console.log(`[kiosk] config: ${store.filePath}`);
 
   let port;
@@ -229,7 +229,7 @@ async function main() {
       restart: () => {
         setTimeout(restartApp, 300); // let the HTTP response go out first
       },
-      mqtt: doorbell,
+      mqtt: mqttTriggers,
       screenSize: () => {
         const [width, height] = win ? win.getContentSize() : [1280, 800];
         return { width, height };
@@ -310,6 +310,6 @@ process.on('uncaughtException', (err) => {
 });
 
 app.on('window-all-closed', () => app.quit());
-app.on('will-quit', () => doorbell?.dispose());
+app.on('will-quit', () => mqttTriggers?.dispose());
 
 app.whenReady().then(main);

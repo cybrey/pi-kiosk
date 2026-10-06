@@ -9,18 +9,19 @@ const { LAYOUTS, normalizeRatios } = require('./layouts');
 
 const DEFAULT_PATH = path.join(os.homedir(), '.config', 'pi-kiosk', 'config.json');
 
-// Doorbell over MQTT (see src/main/mqtt.js). Off until a broker is filled in.
+// MQTT broker connection (see src/main/mqtt.js). Off until a broker is filled
+// in. Which message shows which setup is set per setup (setup.mqtt).
 const DEFAULT_MQTT = {
   enabled: false,
   url: 'mqtt://homeassistant.local:1883',
   username: '',
   password: '',
-  topicPrefix: 'doorbell',
+  topicPrefix: 'doorbell', // online/offline status goes to <prefix>/clients/<clientId>
   clientId: '',
-  setupId: '',
-  durationSeconds: 30,
   maxAgeSeconds: 30,
 };
+
+const DEFAULT_TRIGGER_SECONDS = 30;
 
 const DEFAULT_SETTINGS = {
   activeSetupId: null,
@@ -122,6 +123,20 @@ function cleanSetup(s, siteIds) {
     ratios: normalizeRatios(layout, s.ratios),
     panes,
     inRotation: s.inRotation !== false,
+    mqtt: cleanTrigger(s.mqtt, name),
+  };
+}
+
+// An MQTT message that shows this setup temporarily. An empty topic means none.
+function cleanTrigger(t, setupName) {
+  const src = t || {};
+  const topic = String(src.topic || '').trim().replace(/^\/+|\/+$/g, '');
+  if (/[+#]/.test(topic)) {
+    throw new ValidationError(`MQTT topic for "${setupName}" can't contain + or #`);
+  }
+  return {
+    topic,
+    durationSeconds: Math.round(num(src.durationSeconds, DEFAULT_TRIGGER_SECONDS, 5, 3600)),
   };
 }
 
@@ -145,7 +160,7 @@ function cleanSettings(s, setupIds) {
   out.configPin = String(src.configPin || '').trim();
   out.port = Math.round(num(src.port, out.port, 1, 65535));
   out.activeSetupId = setupIds.has(src.activeSetupId) ? src.activeSetupId : [...setupIds][0] || null;
-  out.mqtt = cleanMqtt(src.mqtt, setupIds);
+  out.mqtt = cleanMqtt(src.mqtt);
   return out;
 }
 
@@ -155,7 +170,7 @@ function topicId(v, def) {
   return id || def;
 }
 
-function cleanMqtt(m, setupIds) {
+function cleanMqtt(m) {
   const src = m || {};
   const url = String(src.url ?? DEFAULT_MQTT.url).trim();
   if (src.enabled && !/^(mqtts?|wss?):\/\/[^/]+/.test(url)) {
@@ -168,10 +183,21 @@ function cleanMqtt(m, setupIds) {
     password: String(src.password || ''),
     topicPrefix: String(src.topicPrefix || DEFAULT_MQTT.topicPrefix).trim().replace(/^\/+|\/+$/g, '') || DEFAULT_MQTT.topicPrefix,
     clientId: topicId(src.clientId, topicId(os.hostname().split('.')[0], 'kiosk')),
-    setupId: setupIds.has(src.setupId) ? src.setupId : '',
-    durationSeconds: Math.round(num(src.durationSeconds, DEFAULT_MQTT.durationSeconds, 5, 3600)),
     maxAgeSeconds: Math.round(num(src.maxAgeSeconds, DEFAULT_MQTT.maxAgeSeconds, 0, 3600)),
   };
+}
+
+// The first MQTT version chose one doorbell setup in Settings (settings.mqtt.setupId,
+// durationSeconds). Move that choice onto the setup itself as a trigger.
+function migrateDoorbellSetup(cfg) {
+  const old = cfg.settings?.mqtt;
+  if (!old?.setupId) return;
+  const setup = (cfg.setups || []).find((s) => s.id === old.setupId);
+  if (setup && !setup.mqtt?.topic) {
+    setup.mqtt = { topic: `${old.topicPrefix || DEFAULT_MQTT.topicPrefix}/show`, durationSeconds: old.durationSeconds };
+  }
+  delete old.setupId;
+  delete old.durationSeconds;
 }
 
 // Validate and normalise a whole config object. Throws ValidationError.
@@ -185,11 +211,18 @@ function validate(cfg) {
     siteIds.add(site.id);
     sites.push(site);
   }
+  migrateDoorbellSetup(cfg);
   const setups = [];
   const setupIds = new Set();
+  const topics = new Map(); // MQTT trigger topic -> setup name
   for (const raw of cfg.setups || []) {
     const setup = cleanSetup(raw, siteIds);
     if (!setup.id || setupIds.has(setup.id)) throw new ValidationError(`Duplicate or missing setup id "${setup.id}"`);
+    if (setup.mqtt.topic && topics.has(setup.mqtt.topic)) {
+      throw new ValidationError(
+        `"${topics.get(setup.mqtt.topic)}" and "${setup.name}" can't both use MQTT topic "${setup.mqtt.topic}"`);
+    }
+    if (setup.mqtt.topic) topics.set(setup.mqtt.topic, setup.name);
     setupIds.add(setup.id);
     setups.push(setup);
   }

@@ -90,6 +90,7 @@
           h('div.title', null, s.name,
             active ? h('span.badge', null, display.temporary ? 'Showing (temporary)' : 'Active') : null),
           h('div.meta', null, LAYOUTS[s.layout].name, s.inRotation ? '' : ' · not in swipe rotation'),
+          s.mqtt?.topic ? h('div.meta', null, 'MQTT: ', h('code.id', null, s.mqtt.topic), ` · ${s.mqtt.durationSeconds}s`) : null,
           h('div.meta', null, 'ID: ', h('code.id', { title: 'Use this in API calls, e.g. /api/activate/<id>' }, s.id)),
           h('div.row', null,
             h('button.small.primary', { disabled: active && !display.temporary, onclick: () => run(() => api.post(`/activate/${s.id}`), 'Activated') }, 'Activate'),
@@ -121,6 +122,37 @@
 
     const nameInput = h('input', { type: 'text', value: draft.name, placeholder: 'e.g. HA + Cameras' });
     const rotationInput = h('input', { type: 'checkbox', checked: draft.inRotation !== false });
+
+    // MQTT trigger: show this setup for a while when a message arrives.
+    const trigger = draft.mqtt || { topic: '', durationSeconds: 30 };
+    const broker = state.config.settings.mqtt;
+    const triggerOn = h('input', { type: 'checkbox', checked: !!trigger.topic });
+    const topicInput = h('input', { type: 'text', value: trigger.topic, placeholder: 'e.g. doorbell/show' });
+    const secondsInput = h('input', { type: 'number', value: String(trigger.durationSeconds), min: 5, max: 3600 });
+    const topicHint = h('div.hint');
+    const triggerFields = h('div', null,
+      h('label.field', null, h('span', null, 'Topic'), topicInput, topicHint),
+      field('Show for (seconds)', secondsInput, 'Then the kiosk goes back. Another message restarts the countdown.'),
+    );
+    const updateTrigger = () => {
+      triggerFields.hidden = !triggerOn.checked;
+      const t = topicInput.value.trim().replace(/^\/+|\/+$/g, '');
+      topicHint.textContent = t.endsWith('/show')
+        ? `Also: ${t.slice(0, -5)}/${broker.clientId}/show (this kiosk only) and ${t.slice(0, -5)}/hide (go back now).`
+        : 'Use a topic ending in /show to share it with the Doorbell Popup app on your computers.';
+    };
+    triggerOn.addEventListener('change', () => {
+      updateTrigger();
+      if (triggerOn.checked) topicInput.focus();
+    });
+    topicInput.addEventListener('input', updateTrigger);
+    updateTrigger();
+    const triggerSection = h('div', null,
+      h('label.check', null, triggerOn, 'Show this setup when an MQTT message arrives'),
+      broker.enabled ? null : h('div.hint', { style: 'margin:-8px 0 12px' },
+        'The MQTT broker is not connected yet: set it up under Settings → MQTT broker.'),
+      triggerFields,
+    );
     const picker = h('div.layout-picker');
     const sliders = h('div');
     const preview = h('div.big-preview');
@@ -203,6 +235,7 @@
           ? h('span', null, 'ID for API calls: ', h('code.id', null, existing.id), ' (stays the same if you rename)')
           : 'The ID for API calls is created from this name when you save.'),
         h('label.check', null, rotationInput, 'Include when swiping left/right between setups'),
+        triggerSection,
         h('label.field', null, h('span', null, 'Layout')),
         picker,
         sliders,
@@ -222,7 +255,15 @@
         ratios: draft.ratios,
         panes: draft.panes,
         inRotation: rotationInput.checked,
+        mqtt: {
+          topic: triggerOn.checked ? topicInput.value.trim() : '',
+          durationSeconds: Number(secondsInput.value),
+        },
       };
+      if (triggerOn.checked && !data.mqtt.topic) {
+        api.toast('Enter an MQTT topic, or untick “Show this setup when an MQTT message arrives”', true);
+        return false;
+      }
       return run(() => (existing ? api.put(`/setups/${existing.id}`, data) : api.post('/setups', data)), 'Saved');
     });
     if (!existing) nameInput.focus();
@@ -318,6 +359,15 @@
 
   // ---- settings -------------------------------------------------------------
 
+  // "● Connected" style line, updated live from the server's mqtt events.
+  function mqttStatusLine(status) {
+    const s = status || 'off';
+    const color = s === 'connected' ? '#22c55e' : s.startsWith('error') ? '#ef4444' : s === 'off' ? '#6b7280' : '#f59e0b';
+    return h('div', { id: 'mqtt-status', style: 'display:flex;align-items:center;gap:8px;margin:0 0 10px;font-weight:600' },
+      h('span', { style: `width:10px;height:10px;border-radius:50%;flex:none;background:${color}` }),
+      `Status: ${s}`);
+  }
+
   function renderSettings() {
     const s = state.config.settings;
     const m = s.mqtt;
@@ -349,23 +399,21 @@
           'Sites not on screen stay loaded (paused and muted) so switching back is instant. Lower this if the Pi runs low on memory.'),
         check('ignoreCertErrors', 'Accept self-signed HTTPS certificates (common on LAN devices)'),
       ),
-      h('fieldset', null, h('legend', null, 'Doorbell (MQTT)'),
-        h('div.hint', { style: 'margin:0 0 14px' }, 'When Home Assistant publishes a doorbell ring, show a setup for a while, then go back. ',
-          'Status: ', h('strong', { id: 'mqtt-status' }, state.mqttStatus || 'off')),
-        h('label.check', null, h('input', { type: 'checkbox', name: 'mqttEnabled', checked: m.enabled }), 'Listen for doorbell rings'),
+      h('fieldset', null, h('legend', null, 'MQTT broker'),
+        mqttStatusLine(state.mqttStatus),
+        h('div.hint', { style: 'margin:0 0 14px' },
+          'Lets Home Assistant show a setup on demand, e.g. the doorbell camera when someone rings. ',
+          'Choose which message shows which setup in each setup’s editor (Setups tab → Edit).'),
+        h('label.check', null, h('input', { type: 'checkbox', name: 'mqttEnabled', checked: m.enabled }), 'Connect to the MQTT broker'),
         field('Broker', h('input', { type: 'text', name: 'mqttUrl', value: m.url, placeholder: 'mqtt://homeassistant.local:1883' }),
           'With the Mosquitto add-on: mqtt://<Home Assistant IP>:1883'),
         field('Username', h('input', { type: 'text', name: 'mqttUsername', value: m.username, autocomplete: 'off' }),
           'A Home Assistant user works with the Mosquitto add-on.'),
         field('Password', h('input', { type: 'password', name: 'mqttPassword', value: m.password, autocomplete: 'new-password' })),
-        field('Setup to show', h('select', { name: 'mqttSetupId' },
-          h('option', { value: '', selected: !m.setupId }, '— choose —'),
-          state.config.setups.map((st) => h('option', { value: st.id, selected: st.id === m.setupId }, st.name)))),
-        field('Show for (seconds)', h('input', { type: 'number', name: 'mqttDurationSeconds', value: String(m.durationSeconds), min: 5, max: 3600 }),
-          'Ringing again restarts the countdown.'),
         field('Subscriber id', h('input', { type: 'text', name: 'mqttClientId', value: m.clientId }),
-          `Publish to ${m.topicPrefix}/${m.clientId}/show to ring only this kiosk; ${m.topicPrefix}/show rings every screen.`),
-        field('Topic prefix', h('input', { type: 'text', name: 'mqttTopicPrefix', value: m.topicPrefix })),
+          'Names this kiosk, e.g. doorbell/' + m.clientId + '/show reaches only this kiosk.'),
+        field('Status topic prefix', h('input', { type: 'text', name: 'mqttTopicPrefix', value: m.topicPrefix }),
+          `The kiosk publishes online/offline to ${m.topicPrefix}/clients/${m.clientId}.`),
       ),
       h('fieldset', null, h('legend', null, 'Remote access'),
         field('PIN for editing from other devices', h('input', { type: 'password', name: 'configPin', value: s.configPin, autocomplete: 'new-password' }),
@@ -415,8 +463,6 @@
         url: f.mqttUrl.value.trim(),
         username: f.mqttUsername.value.trim(),
         password: f.mqttPassword.value,
-        setupId: f.mqttSetupId.value,
-        durationSeconds: Number(f.mqttDurationSeconds.value),
         clientId: f.mqttClientId.value.trim(),
         topicPrefix: f.mqttTopicPrefix.value.trim(),
       },
@@ -494,7 +540,6 @@
   events.addEventListener('mqtt', (e) => {
     const { status } = JSON.parse(e.data);
     if (state) state.mqttStatus = status;
-    const el = $('#mqtt-status');
-    if (el) el.textContent = status;
+    $('#mqtt-status')?.replaceWith(mqttStatusLine(status));
   });
 })();

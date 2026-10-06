@@ -20,7 +20,7 @@ function isLoopback(req) {
  *
  * @param {import('./config-store').ConfigStore} store
  * @param {import('./display').Display} display
- * @param {{ reloadPanes: () => void, restart: () => void, screenSize: () => {width:number,height:number}, mqtt?: import('./mqtt').DoorbellSubscriber }} actions
+ * @param {{ reloadPanes: () => void, restart: () => void, screenSize: () => {width:number,height:number}, mqtt?: import('./mqtt').TriggerSubscriber }} actions
  */
 function createServer(store, display, actions) {
   const app = express();
